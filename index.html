@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QR Text Share</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+      text-align: center;
+    }
+    textarea {
+      width: 100%;
+      height: 120px;
+      margin-bottom: 10px;
+    }
+    #qr {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>QR Text Share</h2>
+
+  <div id="inputSection">
+    <textarea id="textInput" placeholder="Enter your message..."></textarea>
+    <button id="generateBtn">Generate QR Code</button>
+  </div>
+
+  <div id="outputSection" style="display:none;">
+    <p>Share this link:</p>
+    <a id="shareLink" href="#" target="_blank"></a>
+    <canvas id="qr"></canvas>
+  </div>
+
+  <div id="displayText" style="margin-top: 30px; font-size: 18px;"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+    import QRious from "https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.module.min.js";
+
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyCgTjWZcxFVg6UmJDb56XnQ0kPe64QoSvE",
+      authDomain: "qrcode-bdf3a.firebaseapp.com",
+      projectId: "qrcode-bdf3a",
+      storageBucket: "qrcode-bdf3a.firebasestorage.app",
+      messagingSenderId: "433946415670",
+      appId: "1:433946415670:web:deae6dbea3d9494b2abe97",
+      measurementId: "G-PSMQDNJ024"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const uid = location.hash.replace('#', '');
+
+    if (uid) {
+      document.getElementById("inputSection").style.display = "none";
+      const docRef = doc(db, "qrTexts", uid);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        document.getElementById("displayText").innerText = snap.data().text;
+      } else {
+        document.getElementById("displayText").innerText = "Message not found.";
+      }
+    }
+
+    document.getElementById("generateBtn").onclick = async () => {
+      const text = document.getElementById("textInput").value.trim();
+      if (!text) return alert("Please enter some text.");
+
+      const id = Math.random().toString(36).substr(2, 8);
+      const docRef = doc(db, "qrTexts", id);
+      await setDoc(docRef, { text });
+
+      const url = `${location.origin}${location.pathname}#${id}`;
+      document.getElementById("shareLink").href = url;
+      document.getElementById("shareLink").innerText = url;
+      document.getElementById("outputSection").style.display = "block";
+
+      new QRious({
+        element: document.getElementById('qr'),
+        value: url,
+        size: 200
+      });
+    };
+  </script>
+</body>
+</html>
