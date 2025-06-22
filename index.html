@@ -3,30 +3,78 @@
 <head>
   <meta charset="UTF-8">
   <title>Text Page Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
-    textarea { width: 100%; height: 200px; }
-    #outputText { white-space: pre-wrap; margin-top: 20px; border: 1px solid #ccc; padding: 10px; }
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f4f4f4;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    textarea {
+      width: 100%;
+      height: 150px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 1rem;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 15px;
+      margin-top: 15px;
+      font-size: 1rem;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #outputText {
+      white-space: pre-wrap;
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+    }
   </style>
 </head>
 <body>
-  <h1>Text Page Generator</h1>
-  <div id="inputSection">
-    <textarea id="textInput" placeholder="Write your text here..."></textarea><br>
-    <button onclick="generatePage()">Generate Text Page</button>
+  <div class="container">
+    <h1>Text Page Generator</h1>
+
+    <div id="inputSection">
+      <textarea id="textInput" placeholder="Write your text here..."></textarea>
+      <button id="generateBtn">Generate Text Page</button>
+    </div>
+
+    <div id="outputSection" style="display:none;">
+      <h2>Shared Text:</h2>
+      <div id="outputText">Loading...</div>
+    </div>
   </div>
 
-  <div id="outputSection" style="display:none;">
-    <h2>Shared Text:</h2>
-    <div id="outputText"></div>
-  </div>
-
-  <!-- Firebase v11+ (modular SDK) -->
+  <!-- Firebase Modular SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
     import { getFirestore, doc, setDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
-    // Your Firebase config
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyCgTjWZcxFVg6UmJDb56XnQ0kPe64QoSvE",
       authDomain: "qrcode-bdf3a.firebaseapp.com",
@@ -40,12 +88,13 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    const hash = location.hash.substring(1);
     const inputSection = document.getElementById("inputSection");
     const outputSection = document.getElementById("outputSection");
     const outputText = document.getElementById("outputText");
+    const generateBtn = document.getElementById("generateBtn");
 
-    const hash = location.hash.substring(1);
-
+    // Load text by hash
     if (hash) {
       inputSection.style.display = "none";
       outputSection.style.display = "block";
@@ -62,19 +111,20 @@
       });
     }
 
-    window.generatePage = async function () {
+    // Handle button click
+    generateBtn.addEventListener("click", async () => {
       const text = document.getElementById("textInput").value.trim();
       if (!text) {
-        alert("Please enter some text.");
+        alert("Please write some text first.");
         return;
       }
 
       const uid = doc(collection(db, "textPages")).id;
       await setDoc(doc(db, "textPages", uid), { text });
 
-      window.location.hash = uid;
+      window.location.href = `#${uid}`;
       location.reload();
-    };
+    });
   </script>
 </body>
 </html>
