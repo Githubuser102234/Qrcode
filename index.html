@@ -85,12 +85,13 @@
 
   <div id="displayText"></div>
 
+  <!-- ✅ Script at bottom so DOM is ready -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, Timestamp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
     import QRious from "https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.module.min.js";
 
-    // Your Firebase config
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyCgTjWZcxFVg6UmJDb56XnQ0kPe64QoSvE",
       authDomain: "qrcode-bdf3a.firebaseapp.com",
@@ -106,7 +107,7 @@
 
     const uid = location.hash.replace('#', '');
 
-    // If page has a #UID, fetch and display it
+    // ✅ Show QR text if opened via #link
     if (uid) {
       document.getElementById("inputSection").style.display = "none";
       const ref = doc(db, "qrTexts", uid);
@@ -117,8 +118,8 @@
         const createdAt = data.createdAt?.toDate?.();
         if (createdAt) {
           const now = new Date();
-          const age = (now - createdAt) / (1000 * 60 * 60 * 24); // in days
-          if (age > 3) {
+          const ageDays = (now - createdAt) / (1000 * 60 * 60 * 24);
+          if (ageDays > 3) {
             document.getElementById("displayText").innerText = "⚠️ This message has expired.";
           } else {
             document.getElementById("displayText").innerText = data.text;
@@ -131,31 +132,29 @@
       }
     }
 
-    // Wait for DOM to be ready to hook up button
-    window.addEventListener('DOMContentLoaded', () => {
-      document.getElementById("generateBtn").addEventListener("click", async () => {
-        const text = document.getElementById("textInput").value.trim();
-        if (!text) return alert("Please enter some text.");
+    // ✅ Button click generates QR code and saves to Firestore
+    document.getElementById("generateBtn").onclick = async () => {
+      const text = document.getElementById("textInput").value.trim();
+      if (!text) return alert("Please enter some text.");
 
-        const id = Math.random().toString(36).substring(2, 10);
-        const ref = doc(db, "qrTexts", id);
-        await setDoc(ref, {
-          text,
-          createdAt: new Date() // Will use client time, or use serverTimestamp() if desired
-        });
-
-        const url = `${location.origin}${location.pathname}#${id}`;
-        document.getElementById("shareLink").href = url;
-        document.getElementById("shareLink").innerText = url;
-        document.getElementById("outputSection").style.display = "block";
-
-        new QRious({
-          element: document.getElementById('qr'),
-          value: url,
-          size: 200
-        });
+      const id = Math.random().toString(36).substring(2, 10);
+      const ref = doc(db, "qrTexts", id);
+      await setDoc(ref, {
+        text,
+        createdAt: Timestamp.fromDate(new Date())
       });
-    });
+
+      const url = `${location.origin}${location.pathname}#${id}`;
+      document.getElementById("shareLink").href = url;
+      document.getElementById("shareLink").innerText = url;
+      document.getElementById("outputSection").style.display = "block";
+
+      new QRious({
+        element: document.getElementById('qr'),
+        value: url,
+        size: 200
+      });
+    };
   </script>
 </body>
 </html>
