@@ -3,21 +3,68 @@
 <head>
   <meta charset="UTF-8">
   <title>QR Text Share</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
+    :root {
+      font-family: system-ui, sans-serif;
+    }
+
     body {
-      font-family: sans-serif;
       padding: 20px;
       max-width: 600px;
       margin: auto;
       text-align: center;
     }
+
     textarea {
       width: 100%;
       height: 120px;
       margin-bottom: 10px;
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
     }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
     #qr {
       margin-top: 20px;
+    }
+
+    #shareLink {
+      display: block;
+      margin-top: 10px;
+      word-break: break-all;
+    }
+
+    #displayText {
+      margin-top: 30px;
+      font-size: 18px;
+      white-space: pre-wrap;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 15px;
+      }
+
+      textarea {
+        height: 100px;
+      }
     }
   </style>
 </head>
@@ -36,11 +83,11 @@
     <canvas id="qr"></canvas>
   </div>
 
-  <div id="displayText" style="margin-top: 30px; font-size: 18px;"></div>
+  <div id="displayText"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
     import QRious from "https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.module.min.js";
 
     // Your Firebase config
@@ -59,36 +106,56 @@
 
     const uid = location.hash.replace('#', '');
 
+    // If page has a #UID, fetch and display it
     if (uid) {
       document.getElementById("inputSection").style.display = "none";
-      const docRef = doc(db, "qrTexts", uid);
-      const snap = await getDoc(docRef);
+      const ref = doc(db, "qrTexts", uid);
+      const snap = await getDoc(ref);
+
       if (snap.exists()) {
-        document.getElementById("displayText").innerText = snap.data().text;
+        const data = snap.data();
+        const createdAt = data.createdAt?.toDate?.();
+        if (createdAt) {
+          const now = new Date();
+          const age = (now - createdAt) / (1000 * 60 * 60 * 24); // in days
+          if (age > 3) {
+            document.getElementById("displayText").innerText = "⚠️ This message has expired.";
+          } else {
+            document.getElementById("displayText").innerText = data.text;
+          }
+        } else {
+          document.getElementById("displayText").innerText = data.text;
+        }
       } else {
-        document.getElementById("displayText").innerText = "Message not found.";
+        document.getElementById("displayText").innerText = "❌ Message not found.";
       }
     }
 
-    document.getElementById("generateBtn").onclick = async () => {
-      const text = document.getElementById("textInput").value.trim();
-      if (!text) return alert("Please enter some text.");
+    // Wait for DOM to be ready to hook up button
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById("generateBtn").addEventListener("click", async () => {
+        const text = document.getElementById("textInput").value.trim();
+        if (!text) return alert("Please enter some text.");
 
-      const id = Math.random().toString(36).substr(2, 8);
-      const docRef = doc(db, "qrTexts", id);
-      await setDoc(docRef, { text });
+        const id = Math.random().toString(36).substring(2, 10);
+        const ref = doc(db, "qrTexts", id);
+        await setDoc(ref, {
+          text,
+          createdAt: new Date() // Will use client time, or use serverTimestamp() if desired
+        });
 
-      const url = `${location.origin}${location.pathname}#${id}`;
-      document.getElementById("shareLink").href = url;
-      document.getElementById("shareLink").innerText = url;
-      document.getElementById("outputSection").style.display = "block";
+        const url = `${location.origin}${location.pathname}#${id}`;
+        document.getElementById("shareLink").href = url;
+        document.getElementById("shareLink").innerText = url;
+        document.getElementById("outputSection").style.display = "block";
 
-      new QRious({
-        element: document.getElementById('qr'),
-        value: url,
-        size: 200
+        new QRious({
+          element: document.getElementById('qr'),
+          value: url,
+          size: 200
+        });
       });
-    };
+    });
   </script>
 </body>
 </html>
