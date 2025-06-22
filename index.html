@@ -2,81 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>QR Text Share</title>
+  <title>QR Text Share Debug</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root {
-      font-family: system-ui, sans-serif;
-    }
-    body {
-      padding: 20px;
-      max-width: 600px;
-      margin: auto;
-      text-align: center;
-      background-color: #f9f9f9;
-      color: #333;
-    }
-    textarea {
-      width: 100%;
-      height: 120px;
-      margin-bottom: 10px;
-      font-size: 16px;
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      box-sizing: border-box;
-      resize: vertical;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      background-color: #007bff;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-    #qr {
-      margin-top: 20px;
-    }
-    #shareLink {
-      display: block;
-      margin-top: 10px;
-      word-break: break-word;
-      color: #007bff;
-      text-decoration: underline;
-    }
-    #displayText {
-      margin-top: 20px;
-      font-size: 18px;
-      white-space: pre-wrap;
-      min-height: 1.5em;
-      color: red;
-    }
-    @media (max-width: 600px) {
-      body {
-        padding: 15px;
-      }
-      textarea {
-        height: 100px;
-      }
-      button {
-        width: 100%;
-      }
-    }
+    body { font-family: system-ui, sans-serif; padding: 20px; max-width: 600px; margin: auto; text-align: center; background: #f9f9f9; color: #333; }
+    textarea { width: 100%; height: 120px; margin-bottom: 10px; font-size: 16px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+    button { padding: 10px 20px; font-size: 16px; border: none; border-radius: 8px; background: #007bff; color: white; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    #qr { margin-top: 20px; }
+    #shareLink { display: block; margin-top: 10px; word-break: break-word; color: #007bff; text-decoration: underline; }
+    #displayText { margin-top: 20px; font-size: 18px; white-space: pre-wrap; min-height: 1.5em; }
   </style>
 </head>
 <body>
 
-  <h2>QR Text Share</h2>
+  <h2>QR Text Share Debug</h2>
 
   <div id="inputSection">
     <textarea id="textInput" placeholder="Enter your message..."></textarea>
     <button id="generateBtn">Generate QR Code</button>
-    <div id="displayText"></div>
+    <div id="displayText">Initializing...</div>
   </div>
 
   <div id="outputSection" style="display:none;">
@@ -91,6 +36,15 @@
     import QRious from "https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.module.min.js";
 
     (async () => {
+      const displayTextEl = document.getElementById("displayText");
+
+      function logStatus(msg, isError = false) {
+        console.log(msg);
+        displayTextEl.style.color = isError ? "red" : "black";
+        displayTextEl.innerText = msg;
+      }
+
+      // Your Firebase config — make sure this is yours and matches your project
       const firebaseConfig = {
         apiKey: "AIzaSyCgTjWZcxFVg6UmJDb56XnQ0kPe64QoSvE",
         authDomain: "qrcode-bdf3a.firebaseapp.com",
@@ -101,92 +55,83 @@
         measurementId: "G-PSMQDNJ024"
       };
 
-      const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
+      try {
+        logStatus("Initializing Firebase...");
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        logStatus("Firebase initialized. Checking Firestore connectivity...");
 
-      const displayTextEl = document.getElementById("displayText");
-
-      function showError(msg, err) {
-        console.error(msg, err);
-        displayTextEl.style.color = "red";
-        displayTextEl.innerText = "❌ " + msg + (err ? ("\n" + err.message || err) : "");
-      }
-
-      function showSuccess(msg) {
-        displayTextEl.style.color = "green";
-        displayTextEl.innerText = "✅ " + msg;
-      }
-
-      // Load existing QR text if URL has hash
-      const uid = location.hash.replace('#', '');
-      if (uid) {
-        document.getElementById("inputSection").style.display = "none";
+        // Quick check: try to read a doc that may not exist (just to test read permission)
+        const testDocRef = doc(db, "qrTexts", "testDocForConnectivityCheck");
         try {
-          const ref = doc(db, "qrTexts", uid);
-          const snap = await getDoc(ref);
-          if (snap.exists()) {
-            const data = snap.data();
-            const createdAt = data.createdAt?.toDate?.();
-            if (createdAt) {
-              const now = new Date();
-              const ageDays = (now - createdAt) / (1000 * 60 * 60 * 24);
-              if (ageDays > 3) {
-                displayTextEl.style.color = "orange";
-                displayTextEl.innerText = "⚠️ This message has expired.";
-              } else {
-                displayTextEl.style.color = "black";
-                displayTextEl.innerText = data.text;
-              }
-            } else {
+          const snap = await getDoc(testDocRef);
+          logStatus("Firestore read successful. Ready to generate QR codes.");
+
+          // Show input section if hidden
+          document.getElementById("inputSection").style.display = "block";
+
+          // Handle hash to show message
+          const uid = location.hash.replace('#', '');
+          if (uid) {
+            logStatus(`Loading message for id: ${uid}`);
+            const ref = doc(db, "qrTexts", uid);
+            const snap = await getDoc(ref);
+            if (snap.exists()) {
+              const data = snap.data();
               displayTextEl.style.color = "black";
               displayTextEl.innerText = data.text;
+              document.getElementById("inputSection").style.display = "none";
+            } else {
+              logStatus("Message not found.", true);
             }
-          } else {
-            showError("Message not found.");
           }
+
+          // Button click handler
+          document.getElementById("generateBtn").onclick = async () => {
+            displayTextEl.style.color = "black";
+            displayTextEl.innerText = "Saving message...";
+            const text = document.getElementById("textInput").value.trim();
+            if (!text) {
+              displayTextEl.style.color = "red";
+              displayTextEl.innerText = "Please enter some text.";
+              return;
+            }
+
+            const id = Math.random().toString(36).substring(2, 10);
+            const ref = doc(db, "qrTexts", id);
+
+            try {
+              await setDoc(ref, {
+                text,
+                createdAt: Timestamp.fromDate(new Date())
+              });
+              displayTextEl.style.color = "green";
+              displayTextEl.innerText = "Message saved! Generating QR code...";
+              const url = `${location.origin}${location.pathname}#${id}`;
+              const shareLinkEl = document.getElementById("shareLink");
+              shareLinkEl.href = url;
+              shareLinkEl.innerText = url;
+              document.getElementById("outputSection").style.display = "block";
+
+              new QRious({
+                element: document.getElementById('qr'),
+                value: url,
+                size: 200
+              });
+            } catch (e) {
+              console.error("Error saving message:", e);
+              displayTextEl.style.color = "red";
+              displayTextEl.innerText = "Failed to save message: " + (e.message || e);
+            }
+          };
         } catch (e) {
-          showError("Failed to fetch QR data.", e);
+          console.error("Error reading Firestore:", e);
+          logStatus("Firestore read failed: " + (e.message || e), true);
         }
+      } catch (e) {
+        console.error("Firebase initialization error:", e);
+        logStatus("Firebase initialization failed: " + (e.message || e), true);
       }
-
-      // Generate button handler
-      const btn = document.getElementById("generateBtn");
-      btn.onclick = async () => {
-        displayTextEl.innerText = "";
-        const text = document.getElementById("textInput").value.trim();
-        if (!text) {
-          displayTextEl.style.color = "red";
-          displayTextEl.innerText = "Please enter some text.";
-          return;
-        }
-
-        const id = Math.random().toString(36).substring(2, 10);
-        const ref = doc(db, "qrTexts", id);
-
-        try {
-          displayTextEl.style.color = "black";
-          displayTextEl.innerText = "⏳ Saving to Firestore...";
-          await setDoc(ref, {
-            text,
-            createdAt: Timestamp.fromDate(new Date())
-          });
-          showSuccess("Saved successfully!");
-
-          const url = `${location.origin}${location.pathname}#${id}`;
-          const shareLinkEl = document.getElementById("shareLink");
-          shareLinkEl.href = url;
-          shareLinkEl.innerText = url;
-          document.getElementById("outputSection").style.display = "block";
-
-          new QRious({
-            element: document.getElementById('qr'),
-            value: url,
-            size: 200
-          });
-        } catch (e) {
-          showError("Failed to save or generate QR code.", e);
-        }
-      };
     })();
   </script>
 </body>
