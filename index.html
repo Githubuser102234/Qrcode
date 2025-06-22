@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>QR Text Share</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
       font-family: system-ui, sans-serif;
     }
-
     body {
       padding: 20px;
       max-width: 600px;
@@ -17,7 +16,6 @@
       background-color: #f9f9f9;
       color: #333;
     }
-
     textarea {
       width: 100%;
       height: 120px;
@@ -27,8 +25,8 @@
       border-radius: 8px;
       border: 1px solid #ccc;
       box-sizing: border-box;
+      resize: vertical;
     }
-
     button {
       padding: 10px 20px;
       font-size: 16px;
@@ -38,38 +36,33 @@
       color: white;
       cursor: pointer;
     }
-
     button:hover {
       background-color: #0056b3;
     }
-
     #qr {
       margin-top: 20px;
     }
-
     #shareLink {
       display: block;
       margin-top: 10px;
-      word-break: break-all;
+      word-break: break-word;
       color: #007bff;
       text-decoration: underline;
     }
-
     #displayText {
-      margin-top: 30px;
+      margin-top: 20px;
       font-size: 18px;
       white-space: pre-wrap;
+      min-height: 1.5em;
+      color: red;
     }
-
     @media (max-width: 600px) {
       body {
         padding: 15px;
       }
-
       textarea {
         height: 100px;
       }
-
       button {
         width: 100%;
       }
@@ -83,15 +76,14 @@
   <div id="inputSection">
     <textarea id="textInput" placeholder="Enter your message..."></textarea>
     <button id="generateBtn">Generate QR Code</button>
+    <div id="displayText"></div>
   </div>
 
   <div id="outputSection" style="display:none;">
     <p>Share this link:</p>
-    <a id="shareLink" href="#" target="_blank"></a>
+    <a id="shareLink" href="#" target="_blank" rel="noopener noreferrer"></a>
     <canvas id="qr"></canvas>
   </div>
-
-  <div id="displayText"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
@@ -112,13 +104,21 @@
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
 
-      const showError = (msg, err) => {
+      const displayTextEl = document.getElementById("displayText");
+
+      function showError(msg, err) {
         console.error(msg, err);
-        document.getElementById("displayText").innerText = "❌ " + msg;
-      };
+        displayTextEl.style.color = "red";
+        displayTextEl.innerText = "❌ " + msg + (err ? ("\n" + err.message || err) : "");
+      }
 
+      function showSuccess(msg) {
+        displayTextEl.style.color = "green";
+        displayTextEl.innerText = "✅ " + msg;
+      }
+
+      // Load existing QR text if URL has hash
       const uid = location.hash.replace('#', '');
-
       if (uid) {
         document.getElementById("inputSection").style.display = "none";
         try {
@@ -131,53 +131,62 @@
               const now = new Date();
               const ageDays = (now - createdAt) / (1000 * 60 * 60 * 24);
               if (ageDays > 3) {
-                document.getElementById("displayText").innerText = "⚠️ This message has expired.";
+                displayTextEl.style.color = "orange";
+                displayTextEl.innerText = "⚠️ This message has expired.";
               } else {
-                document.getElementById("displayText").innerText = data.text;
+                displayTextEl.style.color = "black";
+                displayTextEl.innerText = data.text;
               }
             } else {
-              document.getElementById("displayText").innerText = data.text;
+              displayTextEl.style.color = "black";
+              displayTextEl.innerText = data.text;
             }
           } else {
-            document.getElementById("displayText").innerText = "❌ Message not found.";
+            showError("Message not found.");
           }
         } catch (e) {
           showError("Failed to fetch QR data.", e);
         }
       }
 
+      // Generate button handler
       const btn = document.getElementById("generateBtn");
-      if (btn) {
-        btn.onclick = async () => {
-          const text = document.getElementById("textInput").value.trim();
-          if (!text) return alert("Please enter some text.");
+      btn.onclick = async () => {
+        displayTextEl.innerText = "";
+        const text = document.getElementById("textInput").value.trim();
+        if (!text) {
+          displayTextEl.style.color = "red";
+          displayTextEl.innerText = "Please enter some text.";
+          return;
+        }
 
-          const id = Math.random().toString(36).substring(2, 10);
-          const ref = doc(db, "qrTexts", id);
+        const id = Math.random().toString(36).substring(2, 10);
+        const ref = doc(db, "qrTexts", id);
 
-          try {
-            await setDoc(ref, {
-              text,
-              createdAt: Timestamp.fromDate(new Date())
-            });
+        try {
+          displayTextEl.style.color = "black";
+          displayTextEl.innerText = "⏳ Saving to Firestore...";
+          await setDoc(ref, {
+            text,
+            createdAt: Timestamp.fromDate(new Date())
+          });
+          showSuccess("Saved successfully!");
 
-            const url = `${location.origin}${location.pathname}#${id}`;
-            document.getElementById("shareLink").href = url;
-            document.getElementById("shareLink").innerText = url;
-            document.getElementById("outputSection").style.display = "block";
+          const url = `${location.origin}${location.pathname}#${id}`;
+          const shareLinkEl = document.getElementById("shareLink");
+          shareLinkEl.href = url;
+          shareLinkEl.innerText = url;
+          document.getElementById("outputSection").style.display = "block";
 
-            new QRious({
-              element: document.getElementById('qr'),
-              value: url,
-              size: 200
-            });
-          } catch (e) {
-            showError("Failed to save or generate QR code.", e);
-          }
-        };
-      } else {
-        showError("Generate button not found.");
-      }
+          new QRious({
+            element: document.getElementById('qr'),
+            value: url,
+            size: 200
+          });
+        } catch (e) {
+          showError("Failed to save or generate QR code.", e);
+        }
+      };
     })();
   </script>
 </body>
