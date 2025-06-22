@@ -1,61 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Text Page Generator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
-      font-family: system-ui, sans-serif;
-      background: #f0f0f0;
+      font-family: sans-serif;
       padding: 20px;
+      background: #f2f2f2;
       max-width: 600px;
       margin: auto;
     }
-    textarea {
+    textarea, button {
       width: 100%;
-      height: 150px;
+      font-size: 1rem;
       padding: 10px;
-      font-size: 1rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      box-sizing: border-box;
-    }
-    button {
       margin-top: 10px;
-      padding: 12px;
-      width: 100%;
-      font-size: 1rem;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
     }
-    button:hover {
-      background-color: #0056b3;
-    }
-    #outputText {
-      white-space: pre-wrap;
-      margin-top: 20px;
+    #output {
       background: white;
       padding: 15px;
+      border-radius: 5px;
+      white-space: pre-wrap;
+      margin-top: 20px;
       border: 1px solid #ccc;
-      border-radius: 4px;
+    }
+    #copyBtn {
+      margin-top: 10px;
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h1>Text Page Generator</h1>
+  <h2>Text Page Generator</h2>
 
-  <div id="inputSection">
+  <div id="inputView">
     <textarea id="textInput" placeholder="Write your text here..."></textarea>
     <button id="generateBtn">Generate Text Page</button>
   </div>
 
-  <div id="outputSection" style="display:none;">
-    <h2>Shared Text:</h2>
-    <div id="outputText">Loading...</div>
+  <div id="outputView" style="display: none;">
+    <div id="output">Loading...</div>
+    <button id="copyBtn">Copy Link</button>
   </div>
 
   <script type="module">
@@ -66,46 +56,53 @@
       apiKey: "AIzaSyCgTjWZcxFVg6UmJDb56XnQ0kPe64QoSvE",
       authDomain: "qrcode-bdf3a.firebaseapp.com",
       projectId: "qrcode-bdf3a",
-      storageBucket: "qrcode-bdf3a.firebasestorage.app",
+      storageBucket: "qrcode-bdf3a.appspot.com",
       messagingSenderId: "433946415670",
-      appId: "1:433946415670:web:deae6dbea3d9494b2abe97",
-      measurementId: "G-PSMQDNJ024"
+      appId: "1:433946415670:web:deae6dbea3d9494b2abe97"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
     const hash = location.hash.substring(1);
-    const inputSection = document.getElementById("inputSection");
-    const outputSection = document.getElementById("outputSection");
-    const outputText = document.getElementById("outputText");
+    const inputView = document.getElementById("inputView");
+    const outputView = document.getElementById("outputView");
+    const outputDiv = document.getElementById("output");
 
+    // If viewing a shared page
     if (hash) {
-      inputSection.style.display = "none";
-      outputSection.style.display = "block";
+      inputView.style.display = "none";
+      outputView.style.display = "block";
 
       const docRef = doc(db, "textPages", hash);
-      getDoc(docRef).then((docSnap) => {
+      getDoc(docRef).then(docSnap => {
         if (docSnap.exists()) {
-          outputText.textContent = docSnap.data().text || "No content.";
+          outputDiv.textContent = docSnap.data().text || "(Empty)";
         } else {
-          outputText.textContent = "Text not found.";
+          outputDiv.textContent = "⚠️ Text not found.";
         }
-      }).catch((e) => {
-        console.error(e);
-        outputText.textContent = "Error loading text.";
+      }).catch(err => {
+        outputDiv.textContent = "Error: " + err.message;
+      });
+
+      document.getElementById("copyBtn").addEventListener("click", () => {
+        const url = location.href;
+        navigator.clipboard.writeText(url).then(() => {
+          alert("Link copied!");
+        });
       });
     }
 
+    // When user generates new text page
     document.getElementById("generateBtn").addEventListener("click", async () => {
       const text = document.getElementById("textInput").value.trim();
-      if (!text) return alert("Please write some text first.");
+      if (!text) return alert("Please enter some text.");
 
       const uid = doc(collection(db, "textPages")).id;
       await setDoc(doc(db, "textPages", uid), { text });
 
-      window.location.href = `#${uid}`;
-      location.reload();
+      window.location.href = "#" + uid;
+      location.reload(); // show the shared view
     });
   </script>
 </body>
