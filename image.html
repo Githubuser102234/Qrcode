@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Image Share Page</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg-light: #f0f0f0;
+      --bg-dark: #121212;
+      --text-light: #000;
+      --text-dark: #eee;
+      --btn-bg-light: #007bff;
+      --btn-bg-dark: #0056b3;
+      --btn-text: #fff;
+    }
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+      background: var(--bg-light);
+      color: var(--text-light);
+      transition: background 0.3s, color 0.3s;
+    }
+    body.dark {
+      background: var(--bg-dark);
+      color: var(--text-dark);
+    }
+    input, select, button {
+      width: 100%;
+      font-size: 1rem;
+      padding: 10px;
+      margin-top: 10px;
+      box-sizing: border-box;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background-color: var(--btn-bg-light);
+      color: var(--btn-text);
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    body.dark button {
+      background-color: var(--btn-bg-dark);
+    }
+    body.dark button:hover {
+      background-color: #003a75;
+    }
+    body.dark input,
+    body.dark select {
+      background: #222;
+      color: var(--text-dark);
+      border-color: #555;
+    }
+    #preview {
+      margin-top: 20px;
+      max-width: 100%;
+      border-radius: 10px;
+    }
+    #countdown {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    #deleteBtn {
+      margin-top: 10px;
+      background-color: #dc3545;
+    }
+    #deleteBtn:hover {
+      background-color: #a71d2a;
+    }
+    #themeToggle {
+      margin-top: 10px;
+      background-color: #6c757d;
+    }
+    #themeToggle:hover {
+      background-color: #495057;
+    }
+  </style>
+</head>
+<body>
+  <h2>Image Sharing Page</h2>
+
+  <div id="inputSection">
+    <input type="file" id="imageInput" accept="image/*" />
+    <label for="expirationSelect">Select expiration (days):</label>
+    <select id="expirationSelect">
+      <option value="1">1 day</option>
+      <option value="2">2 days</option>
+      <option value="3">3 days</option>
+      <option value="4">4 days</option>
+      <option value="5">5 days</option>
+      <option value="6">6 days</option>
+      <option value="7" selected>7 days</option>
+    </select>
+    <button id="uploadBtn">Upload Image</button>
+  </div>
+
+  <div id="outputSection" style="display:none;">
+    <img id="preview" />
+    <div id="countdown"></div>
+    <button onclick="copyLink()">Copy Link</button>
+    <button id="deleteBtn" style="display:none;">Delete Image</button>
+    <button id="themeToggle">Toggle Dark/Light Theme</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      getDoc,
+      deleteDoc,
+      collection,
+      Timestamp
+    } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCgTjWZcxFVg6UmJDb56XnQ0kPe64QoSvE",
+      authDomain: "qrcode-bdf3a.firebaseapp.com",
+      projectId: "qrcode-bdf3a",
+      storageBucket: "qrcode-bdf3a.appspot.com",
+      messagingSenderId: "433946415670",
+      appId: "1:433946415670:web:deae6dbea3d9494b2abe97"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const DELETE_TOKEN_PREFIX = "imageDeleteToken_";
+    const IMGUR_CLIENT_ID = "0d13c17f342d988";
+
+    const inputSection = document.getElementById("inputSection");
+    const outputSection = document.getElementById("outputSection");
+    const preview = document.getElementById("preview");
+    const countdown = document.getElementById("countdown");
+    const deleteBtn = document.getElementById("deleteBtn");
+    const themeToggle = document.getElementById("themeToggle");
+
+    function applyTheme(theme) {
+      document.body.classList.toggle("dark", theme === "dark");
+    }
+    function getStoredTheme() {
+      return localStorage.getItem("theme") || "light";
+    }
+    function toggleTheme() {
+      const next = getStoredTheme() === "light" ? "dark" : "light";
+      localStorage.setItem("theme", next);
+      applyTheme(next);
+    }
+    themeToggle.addEventListener("click", toggleTheme);
+    applyTheme(getStoredTheme());
+
+    function startCountdown(expirationDate) {
+      function update() {
+        const now = new Date();
+        const diff = expirationDate - now;
+        if (diff <= 0) {
+          countdown.textContent = "⚠️ This image has expired.";
+          preview.style.display = "none";
+          clearInterval(interval);
+          return;
+        }
+        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const h = Math.floor(diff / (1000 * 60 * 60)) % 24;
+        const m = Math.floor(diff / (1000 * 60)) % 60;
+        const s = Math.floor(diff / 1000) % 60;
+        countdown.textContent = `Expires in: ${d}d ${h}h ${m}m ${s}s`;
+      }
+      update();
+      const interval = setInterval(update, 1000);
+    }
+
+    function copyLink() {
+      navigator.clipboard.writeText(location.href).then(() => alert("Link copied!"));
+    }
+
+    async function uploadToImgur(file) {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await fetch("https://api.imgur.com/3/image", {
+        method: "POST",
+        headers: {
+          Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
+        },
+        body: formData
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error("Imgur upload failed");
+      return json.data.link;
+    }
+
+    document.getElementById("uploadBtn").addEventListener("click", async () => {
+      const file = document.getElementById("imageInput").files[0];
+      if (!file) return alert("Please select an image.");
+
+      try {
+        const imgUrl = await uploadToImgur(file);
+        const days = parseInt(document.getElementById("expirationSelect").value);
+        const now = new Date();
+        const expiration = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+        const uid = doc(collection(db, "imagePages")).id;
+
+        await setDoc(doc(db, "imagePages", uid), {
+          imageUrl: imgUrl,
+          expiration: Timestamp.fromDate(expiration),
+          createdAt: Timestamp.fromDate(now)
+        });
+
+        localStorage.setItem(DELETE_TOKEN_PREFIX + uid, uid);
+        location.href = "#" + uid;
+        location.reload();
+      } catch (err) {
+        alert("Upload failed: " + err.message);
+      }
+    });
+
+    async function loadImagePage(uid) {
+      inputSection.style.display = "none";
+      outputSection.style.display = "block";
+
+      const ref = doc(db, "imagePages", uid);
+      const snap = await getDoc(ref);
+
+      if (!snap.exists()) {
+        preview.alt = "⚠️ Image not found.";
+        return;
+      }
+
+      const data = snap.data();
+      const expDate = data.expiration?.toDate?.() || new Date(data.expiration);
+
+      if (new Date() > expDate) {
+        preview.alt = "⚠️ This image has expired.";
+        preview.style.display = "none";
+        countdown.textContent = "";
+        return;
+      }
+
+      preview.src = data.imageUrl;
+      preview.style.display = "block";
+      startCountdown(expDate);
+
+      const isOwner = localStorage.getItem(DELETE_TOKEN_PREFIX + uid) === uid;
+      deleteBtn.style.display = isOwner ? "block" : "none";
+
+      deleteBtn.onclick = async () => {
+        if (!confirm("Delete this image page?")) return;
+        await deleteDoc(ref);
+        localStorage.removeItem(DELETE_TOKEN_PREFIX + uid);
+        alert("Image deleted!");
+        location.href = location.href.split("#")[0];
+        location.reload();
+      };
+    }
+
+    const hash = location.hash.slice(1);
+    if (hash) {
+      loadImagePage(hash);
+    }
+  </script>
+</body>
+</html>
