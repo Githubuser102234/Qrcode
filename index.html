@@ -1,56 +1,68 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8" />
-  <title>Text Page Generator</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text Page Generator with Expiration</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
       font-family: sans-serif;
       padding: 20px;
-      background: #f2f2f2;
       max-width: 600px;
       margin: auto;
+      background: #f0f0f0;
     }
-    textarea, button {
+    textarea, select, button {
       width: 100%;
       font-size: 1rem;
       padding: 10px;
       margin-top: 10px;
+      box-sizing: border-box;
     }
     #output {
+      white-space: pre-wrap;
       background: white;
       padding: 15px;
       border-radius: 5px;
-      white-space: pre-wrap;
       margin-top: 20px;
-      border: 1px solid #ccc;
-    }
-    #copyBtn {
-      margin-top: 10px;
-      background: #007bff;
-      color: white;
-      border: none;
-      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h2>Text Page Generator</h2>
+  <h2>Text Page Generator with Expiration</h2>
 
-  <div id="inputView">
+  <div id="inputSection">
     <textarea id="textInput" placeholder="Write your text here..."></textarea>
+
+    <label for="expirationSelect">Select expiration (days):</label>
+    <select id="expirationSelect" aria-label="Expiration days">
+      <option value="1">1 day</option>
+      <option value="2">2 days</option>
+      <option value="3">3 days</option>
+      <option value="4">4 days</option>
+      <option value="5">5 days</option>
+      <option value="6">6 days</option>
+      <option value="7" selected>7 days</option>
+    </select>
+
     <button id="generateBtn">Generate Text Page</button>
   </div>
 
-  <div id="outputView" style="display: none;">
+  <div id="outputSection" style="display: none;">
     <div id="output">Loading...</div>
-    <button id="copyBtn">Copy Link</button>
+    <button onclick="copyLink()">Copy Link</button>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      getDoc,
+      collection,
+      Timestamp
+    } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCgTjWZcxFVg6UmJDb56XnQ0kPe64QoSvE",
@@ -64,46 +76,70 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const hash = location.hash.substring(1);
-    const inputView = document.getElementById("inputView");
-    const outputView = document.getElementById("outputView");
-    const outputDiv = document.getElementById("output");
+    const inputSection = document.getElementById("inputSection");
+    const outputSection = document.getElementById("outputSection");
+    const output = document.getElementById("output");
 
-    // If viewing a shared page
+    const hash = location.hash.slice(1);
+
     if (hash) {
-      inputView.style.display = "none";
-      outputView.style.display = "block";
+      // Show output view, hide input
+      inputSection.style.display = "none";
+      outputSection.style.display = "block";
 
       const docRef = doc(db, "textPages", hash);
       getDoc(docRef).then(docSnap => {
         if (docSnap.exists()) {
-          outputDiv.textContent = docSnap.data().text || "(Empty)";
+          const data = docSnap.data();
+          const text = data.text || "";
+          const expiration = data.expiration;
+
+          if (expiration) {
+            const now = new Date();
+            const expirationDate = expiration.toDate ? expiration.toDate() : new Date(expiration);
+            if (now > expirationDate) {
+              output.textContent = "⚠️ This text has expired.";
+              return;
+            }
+          }
+
+          output.textContent = text;
         } else {
-          outputDiv.textContent = "⚠️ Text not found.";
+          output.textContent = "⚠️ Text not found.";
         }
       }).catch(err => {
-        outputDiv.textContent = "Error: " + err.message;
-      });
-
-      document.getElementById("copyBtn").addEventListener("click", () => {
-        const url = location.href;
-        navigator.clipboard.writeText(url).then(() => {
-          alert("Link copied!");
-        });
+        output.textContent = "Error loading text: " + err.message;
       });
     }
 
-    // When user generates new text page
     document.getElementById("generateBtn").addEventListener("click", async () => {
       const text = document.getElementById("textInput").value.trim();
       if (!text) return alert("Please enter some text.");
 
-      const uid = doc(collection(db, "textPages")).id;
-      await setDoc(doc(db, "textPages", uid), { text });
+      const days = parseInt(document.getElementById("expirationSelect").value);
+      const now = new Date();
+      const expirationDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
-      window.location.href = "#" + uid;
-      location.reload(); // show the shared view
+      // Firestore expects Timestamp type for date fields
+      const expirationTimestamp = Timestamp.fromDate(expirationDate);
+
+      const uid = doc(collection(db, "textPages")).id;
+
+      await setDoc(doc(db, "textPages", uid), {
+        text,
+        expiration: expirationTimestamp,
+        createdAt: Timestamp.fromDate(now)
+      });
+
+      location.href = "#" + uid;
+      location.reload();
     });
+
+    window.copyLink = function() {
+      navigator.clipboard.writeText(location.href).then(() => {
+        alert("Link copied!");
+      });
+    };
   </script>
 </body>
 </html>
