@@ -2,15 +2,30 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Text Page Generator with Expiration</title>
+  <title>Text Page Generator with Expiration & Theme</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    :root {
+      --bg-light: #f0f0f0;
+      --bg-dark: #121212;
+      --text-light: #000;
+      --text-dark: #eee;
+      --btn-bg-light: #007bff;
+      --btn-bg-dark: #0056b3;
+      --btn-text: #fff;
+    }
     body {
       font-family: sans-serif;
       padding: 20px;
       max-width: 600px;
       margin: auto;
-      background: #f0f0f0;
+      background: var(--bg-light);
+      color: var(--text-light);
+      transition: background 0.3s, color 0.3s;
+    }
+    body.dark {
+      background: var(--bg-dark);
+      color: var(--text-dark);
     }
     textarea, select, button {
       width: 100%;
@@ -18,6 +33,32 @@
       padding: 10px;
       margin-top: 10px;
       box-sizing: border-box;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      transition: background 0.3s, color 0.3s;
+    }
+    body.dark textarea,
+    body.dark select {
+      background: #222;
+      color: var(--text-dark);
+      border-color: #555;
+    }
+    button {
+      background-color: var(--btn-bg-light);
+      color: var(--btn-text);
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    body.dark button {
+      background-color: var(--btn-bg-dark);
+    }
+    body.dark button:hover {
+      background-color: #003a75;
     }
     #output {
       white-space: pre-wrap;
@@ -25,11 +66,35 @@
       padding: 15px;
       border-radius: 5px;
       margin-top: 20px;
+      min-height: 150px;
+      color: var(--text-light);
+    }
+    body.dark #output {
+      background: #222;
+      color: var(--text-dark);
+    }
+    #countdown {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    #deleteBtn {
+      margin-top: 10px;
+      background-color: #dc3545;
+    }
+    #deleteBtn:hover {
+      background-color: #a71d2a;
+    }
+    #themeToggle {
+      margin-top: 10px;
+      background-color: #6c757d;
+    }
+    #themeToggle:hover {
+      background-color: #495057;
     }
   </style>
 </head>
 <body>
-  <h2>Text Page Generator with Expiration</h2>
+  <h2>Text Page Generator with Expiration & Theme</h2>
 
   <div id="inputSection">
     <textarea id="textInput" placeholder="Write your text here..."></textarea>
@@ -50,7 +115,10 @@
 
   <div id="outputSection" style="display: none;">
     <div id="output">Loading...</div>
+    <div id="countdown"></div>
     <button onclick="copyLink()">Copy Link</button>
+    <button id="deleteBtn" style="display:none;">Delete This Text</button>
+    <button id="themeToggle">Toggle Dark/Light Theme</button>
   </div>
 
   <script type="module">
@@ -61,7 +129,8 @@
       setDoc,
       getDoc,
       collection,
-      Timestamp
+      Timestamp,
+      deleteDoc
     } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -79,37 +148,126 @@
     const inputSection = document.getElementById("inputSection");
     const outputSection = document.getElementById("outputSection");
     const output = document.getElementById("output");
+    const countdown = document.getElementById("countdown");
+    const deleteBtn = document.getElementById("deleteBtn");
+    const themeToggle = document.getElementById("themeToggle");
+
+    // Theme handling
+    function applyTheme(theme) {
+      if (theme === "dark") {
+        document.body.classList.add("dark");
+      } else {
+        document.body.classList.remove("dark");
+      }
+    }
+    function getStoredTheme() {
+      return localStorage.getItem("theme") || "light";
+    }
+    function toggleTheme() {
+      const current = getStoredTheme();
+      const next = current === "light" ? "dark" : "light";
+      localStorage.setItem("theme", next);
+      applyTheme(next);
+    }
+    themeToggle.addEventListener("click", toggleTheme);
+    applyTheme(getStoredTheme());
 
     const hash = location.hash.slice(1);
 
-    if (hash) {
-      // Show output view, hide input
+    // Local storage key prefix for delete tokens
+    const DELETE_TOKEN_PREFIX = "textPageDeleteToken_";
+
+    // Show a countdown until expiration, or expired message
+    function startCountdown(expirationDate) {
+      function update() {
+        const now = new Date();
+        const diffMs = expirationDate - now;
+        if (diffMs <= 0) {
+          countdown.textContent = "⚠️ This text has expired.";
+          output.textContent = "";
+          clearInterval(intervalId);
+          return;
+        }
+        // Format diffMs to days, hours, minutes, seconds
+        const seconds = Math.floor(diffMs / 1000) % 60;
+        const minutes = Math.floor(diffMs / (1000 * 60)) % 60;
+        const hours = Math.floor(diffMs / (1000 * 60 * 60)) % 24;
+        const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        countdown.textContent = `Expires in: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+      }
+      update();
+      const intervalId = setInterval(update, 1000);
+    }
+
+    // Copy link helper
+    window.copyLink = function () {
+      navigator.clipboard.writeText(location.href).then(() => {
+        alert("Link copied!");
+      });
+    };
+
+    async function showTextPage(uid) {
       inputSection.style.display = "none";
       outputSection.style.display = "block";
 
-      const docRef = doc(db, "textPages", hash);
-      getDoc(docRef).then(docSnap => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const text = data.text || "";
-          const expiration = data.expiration;
-
-          if (expiration) {
-            const now = new Date();
-            const expirationDate = expiration.toDate ? expiration.toDate() : new Date(expiration);
-            if (now > expirationDate) {
-              output.textContent = "⚠️ This text has expired.";
-              return;
-            }
-          }
-
-          output.textContent = text;
-        } else {
+      const docRef = doc(db, "textPages", uid);
+      try {
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
           output.textContent = "⚠️ Text not found.";
+          return;
         }
-      }).catch(err => {
+        const data = docSnap.data();
+        const text = data.text || "";
+        const expiration = data.expiration;
+        if (expiration) {
+          const expirationDate = expiration.toDate ? expiration.toDate() : new Date(expiration);
+          const now = new Date();
+          if (now > expirationDate) {
+            output.textContent = "⚠️ This text has expired.";
+            countdown.textContent = "";
+            return;
+          } else {
+            output.textContent = text;
+            startCountdown(expirationDate);
+          }
+        } else {
+          output.textContent = text;
+          countdown.textContent = "";
+        }
+
+        // Show delete button only if local delete token matches uid
+        const localToken = localStorage.getItem(DELETE_TOKEN_PREFIX + uid);
+        if (localToken === uid) {
+          deleteBtn.style.display = "block";
+        } else {
+          deleteBtn.style.display = "none";
+        }
+      } catch (err) {
         output.textContent = "Error loading text: " + err.message;
-      });
+      }
+    }
+
+    async function deleteTextPage(uid) {
+      if (!confirm("Are you sure you want to delete this text page? This action cannot be undone.")) return;
+      try {
+        await deleteDoc(doc(db, "textPages", uid));
+        localStorage.removeItem(DELETE_TOKEN_PREFIX + uid);
+        alert("Text page deleted!");
+        location.href = location.href.split("#")[0];
+        location.reload();
+      } catch (err) {
+        alert("Failed to delete: " + err.message);
+      }
+    }
+
+    deleteBtn.addEventListener("click", () => deleteTextPage(hash));
+
+    if (hash) {
+      showTextPage(hash);
+    } else {
+      inputSection.style.display = "block";
+      outputSection.style.display = "none";
     }
 
     document.getElementById("generateBtn").addEventListener("click", async () => {
@@ -125,21 +283,21 @@
 
       const uid = doc(collection(db, "textPages")).id;
 
-      await setDoc(doc(db, "textPages", uid), {
-        text,
-        expiration: expirationTimestamp,
-        createdAt: Timestamp.fromDate(now)
-      });
+      try {
+        await setDoc(doc(db, "textPages", uid), {
+          text,
+          expiration: expirationTimestamp,
+          createdAt: Timestamp.fromDate(now)
+        });
+        // Save delete token locally
+        localStorage.setItem(DELETE_TOKEN_PREFIX + uid, uid);
 
-      location.href = "#" + uid;
-      location.reload();
+        location.href = "#" + uid;
+        location.reload();
+      } catch (err) {
+        alert("Failed to save text: " + err.message);
+      }
     });
-
-    window.copyLink = function() {
-      navigator.clipboard.writeText(location.href).then(() => {
-        alert("Link copied!");
-      });
-    };
   </script>
 </body>
 </html>
