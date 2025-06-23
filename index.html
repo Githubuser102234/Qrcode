@@ -117,6 +117,7 @@
     <div id="output">Loading...</div>
     <div id="countdown"></div>
     <button onclick="copyLink()">Copy Link</button>
+    <button id="editBtn" style="display:none;">Edit This Text</button>
     <button id="deleteBtn" style="display:none;">Delete This Text</button>
     <button id="themeToggle">Toggle Dark/Light Theme</button>
   </div>
@@ -150,9 +151,9 @@
     const output = document.getElementById("output");
     const countdown = document.getElementById("countdown");
     const deleteBtn = document.getElementById("deleteBtn");
+    const editBtn = document.getElementById("editBtn");
     const themeToggle = document.getElementById("themeToggle");
 
-    // Theme handling
     function applyTheme(theme) {
       if (theme === "dark") {
         document.body.classList.add("dark");
@@ -173,11 +174,8 @@
     applyTheme(getStoredTheme());
 
     const hash = location.hash.slice(1);
-
-    // Local storage key prefix for delete tokens
     const DELETE_TOKEN_PREFIX = "textPageDeleteToken_";
 
-    // Show a countdown until expiration, or expired message
     function startCountdown(expirationDate) {
       function update() {
         const now = new Date();
@@ -188,7 +186,6 @@
           clearInterval(intervalId);
           return;
         }
-        // Format diffMs to days, hours, minutes, seconds
         const seconds = Math.floor(diffMs / 1000) % 60;
         const minutes = Math.floor(diffMs / (1000 * 60)) % 60;
         const hours = Math.floor(diffMs / (1000 * 60 * 60)) % 24;
@@ -199,7 +196,6 @@
       const intervalId = setInterval(update, 1000);
     }
 
-    // Copy link helper
     window.copyLink = function () {
       navigator.clipboard.writeText(location.href).then(() => {
         alert("Link copied!");
@@ -236,13 +232,26 @@
           countdown.textContent = "";
         }
 
-        // Show delete button only if local delete token matches uid
         const localToken = localStorage.getItem(DELETE_TOKEN_PREFIX + uid);
-        if (localToken === uid) {
-          deleteBtn.style.display = "block";
-        } else {
-          deleteBtn.style.display = "none";
-        }
+        const isOwner = localToken === uid;
+        deleteBtn.style.display = isOwner ? "block" : "none";
+        editBtn.style.display = isOwner ? "block" : "none";
+
+        editBtn.onclick = async () => {
+          const newText = prompt("Edit your text:", text);
+          if (newText === null) return;
+          try {
+            await setDoc(docRef, {
+              ...data,
+              text: newText
+            }, { merge: true });
+            alert("Text updated!");
+            output.textContent = newText;
+          } catch (err) {
+            alert("Failed to update text: " + err.message);
+          }
+        };
+
       } catch (err) {
         output.textContent = "Error loading text: " + err.message;
       }
@@ -278,9 +287,7 @@
       const now = new Date();
       const expirationDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
-      // Firestore expects Timestamp type for date fields
       const expirationTimestamp = Timestamp.fromDate(expirationDate);
-
       const uid = doc(collection(db, "textPages")).id;
 
       try {
@@ -289,9 +296,7 @@
           expiration: expirationTimestamp,
           createdAt: Timestamp.fromDate(now)
         });
-        // Save delete token locally
         localStorage.setItem(DELETE_TOKEN_PREFIX + uid, uid);
-
         location.href = "#" + uid;
         location.reload();
       } catch (err) {
