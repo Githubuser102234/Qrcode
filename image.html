@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <title>Image Share Page</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta property="og:title" content="Shared Image" />
+  <meta property="og:image" content="" id="ogImage">
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="" id="ogUrl">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="" id="twitterImage">
   <style>
     :root {
       --bg-light: #f0f0f0;
@@ -104,7 +110,7 @@
   <div id="outputSection" style="display:none;">
     <img id="preview" />
     <div id="countdown"></div>
-    <button onclick="copyLink()">Copy Link</button>
+    <button id="copyBtn">Copy Link</button>
     <button id="deleteBtn" style="display:none;">Delete Image</button>
     <button id="themeToggle">Toggle Dark/Light Theme</button>
   </div>
@@ -142,18 +148,22 @@
     const countdown = document.getElementById("countdown");
     const deleteBtn = document.getElementById("deleteBtn");
     const themeToggle = document.getElementById("themeToggle");
+    const copyBtn = document.getElementById("copyBtn");
 
     function applyTheme(theme) {
       document.body.classList.toggle("dark", theme === "dark");
     }
+
     function getStoredTheme() {
       return localStorage.getItem("theme") || "light";
     }
+
     function toggleTheme() {
       const next = getStoredTheme() === "light" ? "dark" : "light";
       localStorage.setItem("theme", next);
       applyTheme(next);
     }
+
     themeToggle.addEventListener("click", toggleTheme);
     applyTheme(getStoredTheme());
 
@@ -177,9 +187,13 @@
       const interval = setInterval(update, 1000);
     }
 
-    function copyLink() {
-      navigator.clipboard.writeText(location.href).then(() => alert("Link copied!"));
-    }
+    copyBtn.addEventListener("click", () => {
+      const url = location.href;
+      navigator.clipboard.writeText(url).then(() => {
+        copyBtn.textContent = "✅ Link Copied!";
+        setTimeout(() => (copyBtn.textContent = "Copy Link"), 2000);
+      });
+    });
 
     async function uploadToImgur(file) {
       const formData = new FormData();
@@ -246,6 +260,11 @@
       preview.src = data.imageUrl;
       preview.style.display = "block";
       startCountdown(expDate);
+
+      // Dynamically update meta tags for embeds
+      document.getElementById("ogImage").setAttribute("content", data.imageUrl);
+      document.getElementById("twitterImage").setAttribute("content", data.imageUrl);
+      document.getElementById("ogUrl").setAttribute("content", location.href);
 
       const isOwner = localStorage.getItem(DELETE_TOKEN_PREFIX + uid) === uid;
       deleteBtn.style.display = isOwner ? "block" : "none";
